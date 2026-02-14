@@ -187,46 +187,71 @@ function createBubble(x, y, radius, spawnEdge = 0) {
   container.cursor = 'pointer';
   container.hitArea = new PIXI.Circle(0, 0, radius);
 
-  // Pick a hue — iridescent soap palette
+  // Generate bubble texture using Canvas 2D gradients
   const hue = Math.random() * 360;
+  const texSize = Math.ceil(radius * 2 + 4);
+  const canvas = document.createElement('canvas');
+  canvas.width = texSize;
+  canvas.height = texSize;
+  const ctx = canvas.getContext('2d');
+  const cx = texSize / 2;
+  const cy = texSize / 2;
+  const r = radius;
+
+  // Iridescent rim — radial gradient from transparent center to colored edge
+  const rimGrad = ctx.createRadialGradient(cx, cy, r * 0.6, cx, cy, r);
+  rimGrad.addColorStop(0, 'hsla(' + hue + ', 0%, 100%, 0)');
+  rimGrad.addColorStop(0.7, 'hsla(' + hue + ', 0%, 100%, 0)');
+  rimGrad.addColorStop(0.82, 'hsla(' + ((hue + 280) % 360) + ', 70%, 75%, 0.08)');
+  rimGrad.addColorStop(0.88, 'hsla(' + ((hue + 320) % 360) + ', 65%, 70%, 0.12)');
+  rimGrad.addColorStop(0.93, 'hsla(' + ((hue + 40) % 360) + ', 60%, 75%, 0.1)');
+  rimGrad.addColorStop(0.97, 'hsla(' + ((hue + 160) % 360) + ', 55%, 70%, 0.15)');
+  rimGrad.addColorStop(1, 'hsla(' + ((hue + 200) % 360) + ', 50%, 80%, 0.2)');
+  ctx.fillStyle = rimGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Random iridescent swash — off-center gradient for color variation
+  const swashAngle = Math.random() * Math.PI * 2;
+  const swashDist = r * (0.3 + Math.random() * 0.3);
+  const sx = cx + Math.cos(swashAngle) * swashDist;
+  const sy = cy + Math.sin(swashAngle) * swashDist;
+  const swashGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, r * 0.7);
+  const swashHue = (hue + 120 + Math.random() * 120) % 360;
+  swashGrad.addColorStop(0, 'hsla(' + swashHue + ', 60%, 75%, 0.06)');
+  swashGrad.addColorStop(0.5, 'hsla(' + ((swashHue + 60) % 360) + ', 50%, 70%, 0.03)');
+  swashGrad.addColorStop(1, 'hsla(' + swashHue + ', 0%, 50%, 0)');
+  ctx.fillStyle = swashGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Specular highlight — off-center white radial gradient
+  const hlOffX = cx - r * (0.25 + Math.random() * 0.1);
+  const hlOffY = cy - r * (0.3 + Math.random() * 0.1);
+  const hlGrad = ctx.createRadialGradient(hlOffX, hlOffY, 0, hlOffX, hlOffY, r * 0.45);
+  hlGrad.addColorStop(0, 'rgba(255, 255, 255, ' + (0.15 + Math.random() * 0.1) + ')');
+  hlGrad.addColorStop(0.4, 'rgba(255, 255, 255, 0.06)');
+  hlGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  ctx.fillStyle = hlGrad;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Thin outer edge line
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r - 0.5, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const texture = PIXI.Texture.from(canvas);
+  const sprite = new PIXI.Sprite(texture);
+  sprite.anchor.set(0.5);
+  container.addChild(sprite);
+
   const baseColor = hslToHex(hue, 40, 75);
-  const shineColor = hslToHex((hue + 40) % 360, 70, 85);
-  const rimColor = hslToHex((hue + 180) % 360, 50, 70);
-
-  // Outer rim — very thin, slight white tint
-  const rim = new PIXI.Graphics();
-  rim.lineStyle(1.2, 0xffffff, 0.15);
-  rim.drawCircle(0, 0, radius - 0.5);
-  container.addChild(rim);
-
-  // Iridescent inner glow — concentric colored rings near the rim
-  const glow = new PIXI.Graphics();
-  const ringColors = [
-    { hueOff: 0,   r: 0.97, width: 3, alpha: 0.06 },
-    { hueOff: 60,  r: 0.92, width: 4, alpha: 0.05 },
-    { hueOff: 140, r: 0.86, width: 3, alpha: 0.04 },
-    { hueOff: 220, r: 0.80, width: 2, alpha: 0.03 },
-  ];
-  for (const ring of ringColors) {
-    glow.lineStyle(ring.width, hslToHex((hue + ring.hueOff) % 360, 55, 70), ring.alpha);
-    glow.drawCircle(0, 0, radius * ring.r);
-  }
-  container.addChild(glow);
-
-  // Primary specular highlight — white crescent, top-left
-  const highlight = new PIXI.Graphics();
-  highlight.beginFill(0xffffff, 0.3);
-  highlight.drawEllipse(-radius * 0.28, -radius * 0.35, radius * 0.18, radius * 0.09);
-  highlight.endFill();
-  highlight.rotation = -0.5;
-  container.addChild(highlight);
-
-  // Small dot highlight above main crescent
-  const highlight2 = new PIXI.Graphics();
-  highlight2.beginFill(0xffffff, 0.2);
-  highlight2.drawCircle(-radius * 0.38, -radius * 0.42, radius * 0.04);
-  highlight2.endFill();
-  container.addChild(highlight2);
 
   bubbleLayer.addChild(container);
 
