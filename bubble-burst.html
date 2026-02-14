@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bubble Burst</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.3.2/pixi.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;600;800&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0b1628;
+    overflow: hidden;
+    font-family: 'Outfit', sans-serif;
+    cursor: crosshair;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  canvas {
+    display: block;
+    position: fixed;
+    top: 0; left: 0;
+  }
+
+  #hud {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 24px 32px;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  #score-area {
+    display: flex;
+    flex-direction: column;
+  }
+
+  #score-label {
+    font-size: 11px;
+    font-weight: 300;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    color: rgba(255,255,255,0.35);
+  }
+
+  #score-value {
+    font-size: 48px;
+    font-weight: 800;
+    color: #fff;
+    line-height: 1;
+    text-shadow: 0 0 40px rgba(120, 200, 255, 0.3);
+  }
+
+  #stats {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+  }
+
+  .stat {
+    text-align: right;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    font-weight: 300;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: rgba(255,255,255,0.3);
+  }
+
+  .stat-value {
+    font-size: 22px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.8);
+    line-height: 1.2;
+  }
+
+  #combo-display {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 72px;
+    font-weight: 800;
+    color: #fff;
+    pointer-events: none;
+    z-index: 10;
+    opacity: 0;
+    text-shadow: 0 0 60px rgba(255, 150, 220, 0.6);
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div id="score-area">
+    <div id="score-label">Score</div>
+    <div id="score-value">0</div>
+  </div>
+  <div id="stats">
+    <div class="stat">
+      <div class="stat-label">Streak</div>
+      <div class="stat-value" id="streak-value">0</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Popped</div>
+      <div class="stat-value" id="popped-value">0</div>
+    </div>
+  </div>
+</div>
+
+<div id="combo-display"></div>
+
+<script>
+// ============================================================
+// BUBBLE BURST — Soap bubbles floating, tap to pop
+// Pixi.js (rendering) + GSAP (pop/spawn polish) + Vanilla DOM
+// ============================================================
+
+const W = window.innerWidth;
+const H = window.innerHeight;
+
+const app = new PIXI.Application({
+  width: W,
+  height: H,
+  backgroundColor: 0x0b1628,
+  antialias: true,
+  resolution: window.devicePixelRatio || 1,
+  autoDensity: true,
+});
+document.body.prepend(app.view);
+
+// ---- Layers ----
+const bgLayer = new PIXI.Container();
+const bubbleLayer = new PIXI.Container();
+const fxLayer = new PIXI.Container();
+app.stage.addChild(bgLayer, bubbleLayer, fxLayer);
+
+// ---- Ambient background glow ----
+function drawBackground() {
+  const g = new PIXI.Graphics();
+  // Deep radial glow spots
+  const spots = [
+    { x: W * 0.2, y: H * 0.7, r: 400, color: 0x1a2a5e, alpha: 0.3 },
+    { x: W * 0.8, y: H * 0.3, r: 350, color: 0x2a1a4e, alpha: 0.25 },
+    { x: W * 0.5, y: H * 0.9, r: 500, color: 0x0e2a3e, alpha: 0.2 },
+  ];
+  for (const s of spots) {
+    g.beginFill(s.color, s.alpha);
+    g.drawCircle(s.x, s.y, s.r);
+    g.endFill();
+  }
+  bgLayer.addChild(g);
+}
+drawBackground();
+
+// ---- State ----
+let bubbles = [];
+let score = 0;
+let popped = 0;
+let streak = 0;
+let lastPopTime = 0;
+const STREAK_TIMEOUT = 1200; // ms
+const MAX_BUBBLES = 18;
+const SPAWN_INTERVAL = 800;
+let lastSpawn = 0;
+
+// DOM
+const scoreValue = document.getElementById('score-value');
+const streakValue = document.getElementById('streak-value');
+const poppedValue = document.getElementById('popped-value');
+const comboDisplay = document.getElementById('combo-display');
+
+// ---- Bubble Creation ----
+function createBubble(x, y, radius) {
+  const container = new PIXI.Container();
+  container.x = x;
+  container.y = y;
+  container.interactive = true;
+  container.cursor = 'pointer';
+  container.hitArea = new PIXI.Circle(0, 0, radius);
+
+  // Pick a hue — iridescent soap palette
+  const hue = Math.random() * 360;
+  const baseColor = hslToHex(hue, 60, 65);
+  const shineColor = hslToHex((hue + 40) % 360, 70, 80);
+  const rimColor = hslToHex((hue + 180) % 360, 50, 70);
+
+  // Main bubble body — very transparent
+  const body = new PIXI.Graphics();
+  body.beginFill(baseColor, 0.12);
+  body.drawCircle(0, 0, radius);
+  body.endFill();
+  container.addChild(body);
+
+  // Iridescent rim
+  const rim = new PIXI.Graphics();
+  rim.lineStyle(1.5, rimColor, 0.3);
+  rim.drawCircle(0, 0, radius - 1);
+  container.addChild(rim);
+
+  // Inner glow ring
+  const innerRim = new PIXI.Graphics();
+  innerRim.lineStyle(1, shineColor, 0.15);
+  innerRim.drawCircle(0, 0, radius * 0.7);
+  container.addChild(innerRim);
+
+  // Top-left highlight (specular)
+  const highlight = new PIXI.Graphics();
+  highlight.beginFill(0xffffff, 0.35);
+  highlight.drawEllipse(-radius * 0.28, -radius * 0.32, radius * 0.25, radius * 0.15);
+  highlight.endFill();
+  highlight.rotation = -0.4;
+  container.addChild(highlight);
+
+  // Secondary smaller highlight
+  const highlight2 = new PIXI.Graphics();
+  highlight2.beginFill(0xffffff, 0.15);
+  highlight2.drawEllipse(radius * 0.15, -radius * 0.45, radius * 0.1, radius * 0.06);
+  highlight2.endFill();
+  container.addChild(highlight2);
+
+  // Bottom-right color reflection
+  const reflection = new PIXI.Graphics();
+  reflection.beginFill(shineColor, 0.1);
+  reflection.drawEllipse(radius * 0.2, radius * 0.25, radius * 0.35, radius * 0.2);
+  reflection.endFill();
+  container.addChild(reflection);
+
+  bubbleLayer.addChild(container);
+
+  // Physics / movement data
+  const speed = 0.3 + Math.random() * 0.6;
+  const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.2; // mostly upward
+  const bubble = {
+    container,
+    radius,
+    vx: Math.cos(angle) * speed,
+    vy: Math.sin(angle) * speed,
+    wobbleOffset: Math.random() * Math.PI * 2,
+    wobbleSpeed: 0.008 + Math.random() * 0.012,
+    wobbleAmp: 0.3 + Math.random() * 0.5,
+    baseColor,
+    hue,
+    alive: true,
+    age: 0,
+  };
+
+  // Tap/click to pop
+  container.on('pointerdown', (e) => {
+    e.stopPropagation();
+    popBubble(bubble);
+  });
+
+  // Spawn animation
+  container.scale.set(0);
+  container.alpha = 0;
+  gsap.to(container.scale, {
+    x: 1, y: 1,
+    duration: 0.6,
+    ease: 'elastic.out(1, 0.6)',
+  });
+  gsap.to(container, {
+    alpha: 1,
+    duration: 0.4,
+    ease: 'power2.out',
+  });
+
+  return bubble;
+}
+
+function spawnBubble() {
+  if (bubbles.filter(b => b.alive).length >= MAX_BUBBLES) return;
+
+  const radius = 28 + Math.random() * 42;
+  const x = radius + Math.random() * (W - radius * 2);
+  const y = H + radius + Math.random() * 60;
+  const bubble = createBubble(x, y, radius);
+  bubbles.push(bubble);
+}
+
+// ---- Pop Effect ----
+function popBubble(bubble) {
+  if (!bubble.alive) return;
+  bubble.alive = false;
+
+  const { container, radius, hue } = bubble;
+  const cx = container.x;
+  const cy = container.y;
+
+  // Streak logic
+  const now = Date.now();
+  if (now - lastPopTime < STREAK_TIMEOUT) {
+    streak++;
+  } else {
+    streak = 1;
+  }
+  lastPopTime = now;
+
+  // Score: bigger bubbles = fewer points, streaks multiply
+  const sizeBonus = Math.round(80 / radius * 10);
+  const multiplier = Math.min(streak, 10);
+  const pts = sizeBonus * multiplier;
+  score += pts;
+  popped++;
+  updateUI();
+
+  // Combo text
+  if (streak >= 3) {
+    showCombo(streak);
+  }
+
+  // --- GSAP pop sequence ---
+
+  // 1) Flash white
+  const flash = new PIXI.Graphics();
+  flash.beginFill(0xffffff, 0.6);
+  flash.drawCircle(0, 0, radius * 1.1);
+  flash.endFill();
+  flash.x = cx;
+  flash.y = cy;
+  fxLayer.addChild(flash);
+  gsap.to(flash, {
+    alpha: 0,
+    duration: 0.25,
+    ease: 'power3.out',
+    onComplete: () => fxLayer.removeChild(flash),
+  });
+  gsap.to(flash.scale, {
+    x: 1.4, y: 1.4,
+    duration: 0.25,
+    ease: 'power2.out',
+  });
+
+  // 2) Expanding ring
+  const ring = new PIXI.Graphics();
+  const ringColor = hslToHex(hue, 70, 75);
+  ring.lineStyle(2, ringColor, 0.5);
+  ring.drawCircle(0, 0, radius);
+  ring.x = cx;
+  ring.y = cy;
+  fxLayer.addChild(ring);
+  gsap.to(ring.scale, {
+    x: 2.2, y: 2.2,
+    duration: 0.5,
+    ease: 'power2.out',
+  });
+  gsap.to(ring, {
+    alpha: 0,
+    duration: 0.5,
+    ease: 'power2.out',
+    onComplete: () => fxLayer.removeChild(ring),
+  });
+
+  // 3) Droplet particles — soap film fragments
+  const dropletCount = 8 + Math.floor(Math.random() * 6);
+  for (let i = 0; i < dropletCount; i++) {
+    const droplet = new PIXI.Graphics();
+    const dHue = (hue + Math.random() * 80 - 40 + 360) % 360;
+    const dColor = hslToHex(dHue, 65, 70);
+    const dRadius = 2 + Math.random() * 4;
+    droplet.beginFill(dColor, 0.6);
+    droplet.drawCircle(0, 0, dRadius);
+    droplet.endFill();
+    // Small highlight on each droplet
+    droplet.beginFill(0xffffff, 0.4);
+    droplet.drawCircle(-dRadius * 0.3, -dRadius * 0.3, dRadius * 0.3);
+    droplet.endFill();
+    droplet.x = cx;
+    droplet.y = cy;
+    fxLayer.addChild(droplet);
+
+    const angle = (Math.PI * 2 / dropletCount) * i + Math.random() * 0.4;
+    const dist = radius * (0.8 + Math.random() * 1.2);
+    const dur = 0.4 + Math.random() * 0.3;
+
+    gsap.to(droplet, {
+      x: cx + Math.cos(angle) * dist,
+      y: cy + Math.sin(angle) * dist + 20, // slight gravity
+      alpha: 0,
+      duration: dur,
+      ease: 'power2.out',
+      onComplete: () => fxLayer.removeChild(droplet),
+    });
+    gsap.to(droplet.scale, {
+      x: 0.3, y: 0.3,
+      duration: dur,
+      ease: 'power1.in',
+    });
+  }
+
+  // 4) Score popup
+  const scoreText = new PIXI.Text(
+    multiplier > 1 ? `+${pts} x${multiplier}` : `+${pts}`,
+    {
+      fontFamily: 'Outfit',
+      fontWeight: '600',
+      fontSize: 18 + Math.min(multiplier * 2, 14),
+      fill: 0xffffff,
+      dropShadow: true,
+      dropShadowBlur: 10,
+      dropShadowColor: ringColor,
+      dropShadowDistance: 0,
+    }
+  );
+  scoreText.anchor.set(0.5);
+  scoreText.x = cx;
+  scoreText.y = cy;
+  fxLayer.addChild(scoreText);
+
+  gsap.from(scoreText.scale, { x: 0.4, y: 0.4, duration: 0.2, ease: 'back.out(3)' });
+  gsap.to(scoreText, {
+    y: cy - 60,
+    alpha: 0,
+    duration: 0.7,
+    ease: 'power2.out',
+    delay: 0.15,
+    onComplete: () => fxLayer.removeChild(scoreText),
+  });
+
+  // 5) Remove bubble sprite
+  gsap.to(container.scale, {
+    x: 1.3, y: 1.3,
+    duration: 0.1,
+    ease: 'power2.out',
+  });
+  gsap.to(container, {
+    alpha: 0,
+    duration: 0.12,
+    onComplete: () => bubbleLayer.removeChild(container),
+  });
+}
+
+// ---- Combo Display ----
+function showCombo(count) {
+  const labels = {
+    3: 'Nice!',
+    4: 'Great!',
+    5: 'Amazing!',
+    6: 'INCREDIBLE',
+    7: 'UNSTOPPABLE',
+    8: 'LEGENDARY',
+    9: 'GODLIKE',
+    10: '🫧 BUBBLE GOD 🫧',
+  };
+  const text = labels[Math.min(count, 10)] || `x${count}`;
+  comboDisplay.textContent = text;
+
+  gsap.killTweensOf(comboDisplay);
+  gsap.fromTo(comboDisplay,
+    { opacity: 0, scale: 0.5, y: '-40%' },
+    {
+      opacity: 1, scale: 1, y: '-50%',
+      duration: 0.3,
+      ease: 'back.out(2)',
+    }
+  );
+  gsap.to(comboDisplay, {
+    opacity: 0,
+    y: '-65%',
+    duration: 0.4,
+    ease: 'power2.in',
+    delay: 0.6,
+  });
+}
+
+// ---- UI ----
+function updateUI() {
+  scoreValue.textContent = score;
+  streakValue.textContent = streak;
+  poppedValue.textContent = popped;
+}
+
+// ---- Utility ----
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color);
+  };
+  return (f(0) << 16) + (f(8) << 8) + f(4);
+}
+
+// ---- Game Loop ----
+let time = 0;
+app.ticker.add((delta) => {
+  time += delta;
+  const now = Date.now();
+
+  // Spawn new bubbles
+  if (now - lastSpawn > SPAWN_INTERVAL) {
+    spawnBubble();
+    lastSpawn = now;
+  }
+
+  // Reset streak if timed out
+  if (streak > 0 && now - lastPopTime > STREAK_TIMEOUT) {
+    streak = 0;
+    updateUI();
+  }
+
+  // Update bubbles
+  for (const b of bubbles) {
+    if (!b.alive) continue;
+
+    b.age += delta;
+
+    // Float upward with wobble
+    b.container.x += b.vx + Math.sin(b.age * b.wobbleSpeed) * b.wobbleAmp;
+    b.container.y += b.vy;
+
+    // Gentle scale breathing
+    const breathe = 1 + Math.sin(b.age * 0.02 + b.wobbleOffset) * 0.03;
+    b.container.scale.set(breathe);
+
+    // Soft bounce off walls
+    if (b.container.x - b.radius < 0) { b.vx = Math.abs(b.vx) * 0.8; b.container.x = b.radius; }
+    if (b.container.x + b.radius > W) { b.vx = -Math.abs(b.vx) * 0.8; b.container.x = W - b.radius; }
+
+    // Remove when off top of screen
+    if (b.container.y + b.radius < -20) {
+      b.alive = false;
+      bubbleLayer.removeChild(b.container);
+    }
+  }
+
+  // Clean up dead bubbles periodically
+  if (time % 120 < 1) {
+    bubbles = bubbles.filter(b => b.alive);
+  }
+});
+
+// ---- Handle resize ----
+window.addEventListener('resize', () => {
+  const nw = window.innerWidth;
+  const nh = window.innerHeight;
+  app.renderer.resize(nw, nh);
+});
+
+// Seed some initial bubbles
+for (let i = 0; i < 10; i++) {
+  const radius = 28 + Math.random() * 42;
+  const x = radius + Math.random() * (W - radius * 2);
+  const y = radius + Math.random() * (H - radius * 2);
+  const bubble = createBubble(x, y, radius);
+  bubbles.push(bubble);
+}
+</script>
+</body>
+</html>
