@@ -434,6 +434,7 @@ function popBubble(bubble) {
 
 // ---- Combo Display ----
 function showCombo(count) {
+  if (window.innerWidth < 768) return;
   const labels = {
     3: 'Nice!',
     4: 'Great!',
