@@ -205,25 +205,28 @@ function createBubble(x, y, radius, spawnEdge = 0) {
     const dist = r * (0.7 + Math.random() * 0.3);
     const px = cx + Math.cos(a) * dist;
     const py = cy + Math.sin(a) * dist;
-    const patchR = r * (0.3 + Math.random() * 0.4);
+    const patchR = r * (0.5 + Math.random() * 0.5);
     const pHue = (hue + Math.random() * 360) % 360;
-    const pAlpha = 0.08 + Math.random() * 0.12;
+    const pAlpha = 0.06 + Math.random() * 0.08;
     const pg = ctx.createRadialGradient(px, py, 0, px, py, patchR);
-    pg.addColorStop(0, 'hsla(' + pHue + ', 70%, 70%, ' + pAlpha + ')');
-    pg.addColorStop(0.6, 'hsla(' + ((pHue + 40) % 360) + ', 60%, 75%, ' + (pAlpha * 0.4) + ')');
-    pg.addColorStop(1, 'hsla(' + pHue + ', 50%, 70%, 0)');
+    pg.addColorStop(0, 'hsla(' + pHue + ', 65%, 72%, ' + pAlpha + ')');
+    pg.addColorStop(0.3, 'hsla(' + ((pHue + 30) % 360) + ', 55%, 75%, ' + (pAlpha * 0.6) + ')');
+    pg.addColorStop(0.6, 'hsla(' + ((pHue + 60) % 360) + ', 45%, 78%, ' + (pAlpha * 0.25) + ')');
+    pg.addColorStop(1, 'hsla(' + pHue + ', 40%, 75%, 0)');
     ctx.fillStyle = pg;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
   }
 
+
   // Specular highlight — off-center white radial gradient
   const hlOffX = cx - r * (0.25 + Math.random() * 0.1);
   const hlOffY = cy - r * (0.3 + Math.random() * 0.1);
-  const hlGrad = ctx.createRadialGradient(hlOffX, hlOffY, 0, hlOffX, hlOffY, r * 0.45);
-  hlGrad.addColorStop(0, 'rgba(255, 255, 255, ' + (0.15 + Math.random() * 0.1) + ')');
-  hlGrad.addColorStop(0.4, 'rgba(255, 255, 255, 0.06)');
+  const hlGrad = ctx.createRadialGradient(hlOffX, hlOffY, r * 0.05, hlOffX, hlOffY, r * 0.55);
+  hlGrad.addColorStop(0, 'rgba(255, 255, 255, ' + (0.1 + Math.random() * 0.06) + ')');
+  hlGrad.addColorStop(0.3, 'rgba(255, 255, 255, 0.05)');
+  hlGrad.addColorStop(0.6, 'rgba(255, 255, 255, 0.02)');
   hlGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
   ctx.fillStyle = hlGrad;
   ctx.beginPath();
