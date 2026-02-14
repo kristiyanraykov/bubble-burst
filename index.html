@@ -198,34 +198,25 @@ function createBubble(x, y, radius, spawnEdge = 0) {
   const cy = texSize / 2;
   const r = radius;
 
-  // Iridescent rim — radial gradient from transparent center to colored edge
-  const rimGrad = ctx.createRadialGradient(cx, cy, r * 0.6, cx, cy, r);
-  rimGrad.addColorStop(0, 'hsla(' + hue + ', 0%, 100%, 0)');
-  rimGrad.addColorStop(0.7, 'hsla(' + hue + ', 0%, 100%, 0)');
-  rimGrad.addColorStop(0.82, 'hsla(' + ((hue + 280) % 360) + ', 70%, 75%, 0.08)');
-  rimGrad.addColorStop(0.88, 'hsla(' + ((hue + 320) % 360) + ', 65%, 70%, 0.12)');
-  rimGrad.addColorStop(0.93, 'hsla(' + ((hue + 40) % 360) + ', 60%, 75%, 0.1)');
-  rimGrad.addColorStop(0.97, 'hsla(' + ((hue + 160) % 360) + ', 55%, 70%, 0.15)');
-  rimGrad.addColorStop(1, 'hsla(' + ((hue + 200) % 360) + ', 50%, 80%, 0.2)');
-  ctx.fillStyle = rimGrad;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Random iridescent swash — off-center gradient for color variation
-  const swashAngle = Math.random() * Math.PI * 2;
-  const swashDist = r * (0.3 + Math.random() * 0.3);
-  const sx = cx + Math.cos(swashAngle) * swashDist;
-  const sy = cy + Math.sin(swashAngle) * swashDist;
-  const swashGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, r * 0.7);
-  const swashHue = (hue + 120 + Math.random() * 120) % 360;
-  swashGrad.addColorStop(0, 'hsla(' + swashHue + ', 60%, 75%, 0.06)');
-  swashGrad.addColorStop(0.5, 'hsla(' + ((swashHue + 60) % 360) + ', 50%, 70%, 0.03)');
-  swashGrad.addColorStop(1, 'hsla(' + swashHue + ', 0%, 50%, 0)');
-  ctx.fillStyle = swashGrad;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fill();
+  // Iridescent rim — multiple off-center color patches around the edge
+  const patchCount = 3 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < patchCount; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const dist = r * (0.7 + Math.random() * 0.3);
+    const px = cx + Math.cos(a) * dist;
+    const py = cy + Math.sin(a) * dist;
+    const patchR = r * (0.3 + Math.random() * 0.4);
+    const pHue = (hue + Math.random() * 360) % 360;
+    const pAlpha = 0.08 + Math.random() * 0.12;
+    const pg = ctx.createRadialGradient(px, py, 0, px, py, patchR);
+    pg.addColorStop(0, 'hsla(' + pHue + ', 70%, 70%, ' + pAlpha + ')');
+    pg.addColorStop(0.6, 'hsla(' + ((pHue + 40) % 360) + ', 60%, 75%, ' + (pAlpha * 0.4) + ')');
+    pg.addColorStop(1, 'hsla(' + pHue + ', 50%, 70%, 0)');
+    ctx.fillStyle = pg;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   // Specular highlight — off-center white radial gradient
   const hlOffX = cx - r * (0.25 + Math.random() * 0.1);
