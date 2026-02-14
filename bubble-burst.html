@@ -206,12 +206,6 @@ function createBubble(x, y, radius) {
   rim.drawCircle(0, 0, radius - 1);
   container.addChild(rim);
 
-  // Inner glow ring
-  const innerRim = new PIXI.Graphics();
-  innerRim.lineStyle(1, shineColor, 0.15);
-  innerRim.drawCircle(0, 0, radius * 0.7);
-  container.addChild(innerRim);
-
   // Top-left highlight (specular)
   const highlight = new PIXI.Graphics();
   highlight.beginFill(0xffffff, 0.35);
