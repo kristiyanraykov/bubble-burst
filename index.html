@@ -189,44 +189,44 @@ function createBubble(x, y, radius, spawnEdge = 0) {
 
   // Pick a hue — iridescent soap palette
   const hue = Math.random() * 360;
-  const baseColor = hslToHex(hue, 60, 65);
-  const shineColor = hslToHex((hue + 40) % 360, 70, 80);
+  const baseColor = hslToHex(hue, 40, 75);
+  const shineColor = hslToHex((hue + 40) % 360, 70, 85);
   const rimColor = hslToHex((hue + 180) % 360, 50, 70);
 
-  // Main bubble body — very transparent
-  const body = new PIXI.Graphics();
-  body.beginFill(baseColor, 0.12);
-  body.drawCircle(0, 0, radius);
-  body.endFill();
-  container.addChild(body);
-
-  // Iridescent rim
+  // Outer rim — very thin, slight white tint
   const rim = new PIXI.Graphics();
-  rim.lineStyle(1.5, rimColor, 0.3);
-  rim.drawCircle(0, 0, radius - 1);
+  rim.lineStyle(1.2, 0xffffff, 0.15);
+  rim.drawCircle(0, 0, radius - 0.5);
   container.addChild(rim);
 
-  // Top-left highlight (specular)
+  // Iridescent inner glow — concentric colored rings near the rim
+  const glow = new PIXI.Graphics();
+  const ringColors = [
+    { hueOff: 0,   r: 0.97, width: 3, alpha: 0.06 },
+    { hueOff: 60,  r: 0.92, width: 4, alpha: 0.05 },
+    { hueOff: 140, r: 0.86, width: 3, alpha: 0.04 },
+    { hueOff: 220, r: 0.80, width: 2, alpha: 0.03 },
+  ];
+  for (const ring of ringColors) {
+    glow.lineStyle(ring.width, hslToHex((hue + ring.hueOff) % 360, 55, 70), ring.alpha);
+    glow.drawCircle(0, 0, radius * ring.r);
+  }
+  container.addChild(glow);
+
+  // Primary specular highlight — white crescent, top-left
   const highlight = new PIXI.Graphics();
-  highlight.beginFill(0xffffff, 0.35);
-  highlight.drawEllipse(-radius * 0.28, -radius * 0.32, radius * 0.25, radius * 0.15);
+  highlight.beginFill(0xffffff, 0.3);
+  highlight.drawEllipse(-radius * 0.28, -radius * 0.35, radius * 0.18, radius * 0.09);
   highlight.endFill();
-  highlight.rotation = -0.4;
+  highlight.rotation = -0.5;
   container.addChild(highlight);
 
-  // Secondary smaller highlight
+  // Small dot highlight above main crescent
   const highlight2 = new PIXI.Graphics();
-  highlight2.beginFill(0xffffff, 0.15);
-  highlight2.drawEllipse(radius * 0.15, -radius * 0.45, radius * 0.1, radius * 0.06);
+  highlight2.beginFill(0xffffff, 0.2);
+  highlight2.drawCircle(-radius * 0.38, -radius * 0.42, radius * 0.04);
   highlight2.endFill();
   container.addChild(highlight2);
-
-  // Bottom-right color reflection
-  const reflection = new PIXI.Graphics();
-  reflection.beginFill(shineColor, 0.1);
-  reflection.drawEllipse(radius * 0.2, radius * 0.25, radius * 0.35, radius * 0.2);
-  reflection.endFill();
-  container.addChild(reflection);
 
   bubbleLayer.addChild(container);
 
