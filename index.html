@@ -492,7 +492,8 @@ app.ticker.add((delta) => {
   const now = Date.now();
 
   // Spawn new bubbles
-  if (now - lastSpawn > SPAWN_INTERVAL) {
+  const dynamicInterval = Math.max(300, SPAWN_INTERVAL - streak * 50);
+  if (now - lastSpawn > dynamicInterval) {
     spawnBubble();
     lastSpawn = now;
   }
