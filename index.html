@@ -179,7 +179,7 @@ const poppedValue = document.getElementById('popped-value');
 const comboDisplay = document.getElementById('combo-display');
 
 // ---- Bubble Creation ----
-function createBubble(x, y, radius) {
+function createBubble(x, y, radius, spawnEdge = 0) {
   const container = new PIXI.Container();
   container.x = x;
   container.y = y;
@@ -232,7 +232,11 @@ function createBubble(x, y, radius) {
 
   // Physics / movement data
   const speed = 0.3 + Math.random() * 0.6;
-  const angle = -Math.PI / 2 + (Math.random() - 0.5) * 1.2; // mostly upward
+  const baseAngle = spawnEdge === 0 ? -Math.PI / 2
+    : spawnEdge === 1 ? Math.PI / 2
+    : spawnEdge === 2 ? 0
+    : Math.PI;
+  const angle = baseAngle + (Math.random() - 0.5) * 1.2;
   const bubble = {
     container,
     radius,
@@ -274,9 +278,22 @@ function spawnBubble() {
   if (bubbles.filter(b => b.alive).length >= MAX_BUBBLES) return;
 
   const radius = 28 + Math.random() * 42;
-  const x = radius + Math.random() * (W - radius * 2);
-  const y = H + radius + Math.random() * 60;
-  const bubble = createBubble(x, y, radius);
+  const edge = Math.floor(Math.random() * 4);
+  let x, y;
+  if (edge === 0) {        // bottom
+    x = radius + Math.random() * (W - radius * 2);
+    y = H + radius + Math.random() * 60;
+  } else if (edge === 1) { // top
+    x = radius + Math.random() * (W - radius * 2);
+    y = -radius - Math.random() * 60;
+  } else if (edge === 2) { // left
+    x = -radius - Math.random() * 60;
+    y = radius + Math.random() * (H - radius * 2);
+  } else {                 // right
+    x = W + radius + Math.random() * 60;
+    y = radius + Math.random() * (H - radius * 2);
+  }
+  const bubble = createBubble(x, y, radius, edge);
   bubbles.push(bubble);
 }
 
@@ -518,12 +535,12 @@ app.ticker.add((delta) => {
     const breathe = 1 + Math.sin(b.age * 0.02 + b.wobbleOffset) * 0.03;
     b.container.scale.set(breathe);
 
-    // Soft bounce off walls
-    if (b.container.x - b.radius < 0) { b.vx = Math.abs(b.vx) * 0.8; b.container.x = b.radius; }
-    if (b.container.x + b.radius > W) { b.vx = -Math.abs(b.vx) * 0.8; b.container.x = W - b.radius; }
-
-    // Remove when off top of screen
-    if (b.container.y + b.radius < -20) {
+    // Remove when off any edge of screen
+    const margin = 60;
+    if (b.container.y + b.radius < -margin ||
+        b.container.y - b.radius > H + margin ||
+        b.container.x + b.radius < -margin ||
+        b.container.x - b.radius > W + margin) {
       b.alive = false;
       bubbleLayer.removeChild(b.container);
     }
